@@ -30,9 +30,7 @@ private fun serviceRecordsEqual(a: ScanRecord, b: ScanRecord): Boolean {
     return true;
 }
 
-data class DiscoveredDevice(var record: ScanRecord, var rssi: Int, var txPower: Int, var name: String?, var timestamp: Long = Date().time) {
-
-    private val rssiChangeThreshold = 10 // TODO: Configure
+data class DiscoveredDevice(var record: ScanRecord, var rssi: Int, var txPower: Int, var rssiChangeThreshold: Int, var name: String?, var timestamp: Long = Date().time) {
 
     fun updateMaybe(record: ScanRecord, rssi: Int, txPower: Int, name: String?): Boolean {
         val rssiChanged = Math.abs(this.rssi - rssi) >= rssiChangeThreshold
@@ -59,7 +57,7 @@ class DiscoveryResults private constructor() {
         }
     }
 
-    val discoveredRecords = mutableMapOf<String, DiscoveredDevice>()
+    var discoveredRecords = mutableMapOf<String, DiscoveredDevice>()
     var lastUploadTimestamp: Long = 0
 
 }

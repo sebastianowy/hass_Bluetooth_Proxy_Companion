@@ -9,4 +9,5 @@
 .cxx
 local.properties
 gradle
-
+.ignore
+!.ignore/.gitkeep

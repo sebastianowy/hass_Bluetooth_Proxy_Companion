@@ -167,30 +167,40 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             Log.w(TAG, "Bluetooth adapter disabled")
             return false
         }
+        var rssiTresh = preferences.getInt(applicationContext, R.string.settings_rssi_threshold, R.string.settings_rssi_threshold_def)
+        var dontOverwriteEvents = preferences.getBool(applicationContext, R.string.settings_dont_overwrite_events, R.string.settings_dont_overwrite_events_def)
+
         val devicesFound = mutableSetOf<String>()
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
             .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
             .build()
         val callback = object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, result: ScanResult?) {
-//                Log.d(TAG, "onScanResult(): $result / $callbackType")
-                result?.let { result ->
+            override fun onScanResult(callbackType: Int, outerResult: ScanResult?) {
+                Log.d(TAG, "onScanResult(): $outerResult / $callbackType")
+                outerResult?.let { result ->
                     result.scanRecord?.let { record ->
                         val address = result.device.address.uppercase()
                         devicesFound.add(address)
                         if (!discoveryResults.discoveredRecords.containsKey(address)) {
-                            discoveryResults.discoveredRecords[address] = DiscoveredDevice(record, result.rssi, result.txPower, record.deviceName)
+                            discoveryResults.discoveredRecords[address] = DiscoveredDevice(record, result.rssi, result.txPower, rssiTresh, record.deviceName)
                             Log.d(TAG, "onScanResult(): New entry[$address]: ${discoveryResults.discoveredRecords[address]}")
                         } else {
-                            if (discoveryResults.discoveredRecords[address]?.updateMaybe(record, result.rssi, result.txPower, record.deviceName) == true) {
-                                Log.d(TAG, "onScanResult(): Updated entry[$address]: ${discoveryResults.discoveredRecords[address]}")
+                            if(dontOverwriteEvents) {
+                                discoveryResults.discoveredRecords[address] = DiscoveredDevice(record, result.rssi, result.txPower, rssiTresh, record.deviceName)
+                                Log.d(TAG, "onScanResult(): New entry instead update[$address]: ${discoveryResults.discoveredRecords[address]}")
+                            } else {
+                                if (discoveryResults.discoveredRecords[address]?.updateMaybe(record, result.rssi, result.txPower, record.deviceName) == true) {
+                                    Log.d(TAG, "onScanResult(): Updated entry[$address]: ${discoveryResults.discoveredRecords[address]}")
+                                } else {
+                                    Log.d(TAG, "onScanResult(): Didnt Updated entry[$address]: ${discoveryResults.discoveredRecords[address]}")
+                                }
                             }
                         }
                         record
                     }
                 }
-//                Log.d(TAG, "onScanResult(): New cache: $discoveredRecords")
+                Log.d(TAG, "onScanResult(): New cache: $discoveryResults")
             }
         }
         bleScanner.startScan(emptyList(), settings, callback)
@@ -219,6 +229,10 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             }
             executeScan()
             uploadData()
+            var dontOverwriteEvents = preferences.getBool(applicationContext, R.string.settings_dont_overwrite_events, R.string.settings_dont_overwrite_events_def)
+            if(dontOverwriteEvents) {
+                discoveryResults.discoveredRecords = mutableMapOf<String, DiscoveredDevice>()
+            }
             if (optimizeBackground && !powerManager.isInteractive) {
                 Log.d(TAG, "doWork(): Stopping background scan for optimization")
                 break
