@@ -108,8 +108,11 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                     result.scanRecord?.let { record ->
                         val address = result.device.address.uppercase()
                         devicesFound.add(address)
-                        // "090615.remote.btsw1"
-
+                        val isButton = record.deviceName?.contains("090615.remote.btsw1") == true
+                        if (!isButton) {
+                            Log.d(TAG, "onScanResult(): Skip $address, not a button")
+                            return
+                        }
                         val idx = if (dontOverwriteEvents) discoveryResults.discoveredRecords.keys.count().toString() else address
                         if (!discoveryResults.discoveredRecords.containsKey(idx)) {
                             discoveryResults.discoveredRecords[idx] = DiscoveredDevice(address, record, result.rssi, result.txPower, rssiTresh, record.deviceName)
