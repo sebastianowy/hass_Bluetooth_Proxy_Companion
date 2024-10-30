@@ -10,7 +10,10 @@
     <string name="settings_dont_overwrite_events_def">false</string>
     <string name="settings_dont_omit_sending_webhook">enabled</string>
     <string name="settings_dont_omit_sending_webhook_def">false</string>
+    <string name="settings_use_ongoing_scan">enabled</string>
+    <string name="settings_use_ongoing_scan_def">false</string>
     <string name="settings_webhook">webhook</string>
+    <string name="settings_webhook_def">http://192.168.1.10:8123/api/webhook/bf85f91d5744ecaec3845a834787b4e42e08007f3b84ef58d301855baca40f7f</string>
 
     <string name="settings_rssi_threshold_def">10</string>
     <string name="settings_scan_duration_def">3</string>
