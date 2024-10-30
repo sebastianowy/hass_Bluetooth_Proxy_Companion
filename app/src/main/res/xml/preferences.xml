@@ -15,10 +15,15 @@
             app:key="@string/settings_webhook"
             app:title="Home Assistant webhook"/>
         <SwitchPreferenceCompat
-            app:key="@string/settings_dont_overwrite_events"
-            app:defaultValue="@string/settings_dont_overwrite_events_def"
-            app:singleLineTitle="true"
-            app:title="Dont overwrite events"/>
+                app:key="@string/settings_dont_overwrite_events"
+                app:defaultValue="@string/settings_dont_overwrite_events_def"
+                app:singleLineTitle="true"
+                app:title="Dont overwrite events"/>
+        <SwitchPreferenceCompat
+                app:key="@string/settings_dont_omit_sending_webhook"
+                app:defaultValue="@string/settings_dont_omit_sending_webhook_def"
+                app:singleLineTitle="true"
+                app:title="Dont omit sending webhook"/>
         <EditTextPreference
             app:useSimpleSummaryProvider="true"
             app:defaultValue="@string/settings_rssi_threshold_def"

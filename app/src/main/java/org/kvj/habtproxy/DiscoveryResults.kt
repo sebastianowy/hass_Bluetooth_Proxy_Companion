@@ -30,7 +30,7 @@ private fun serviceRecordsEqual(a: ScanRecord, b: ScanRecord): Boolean {
     return true;
 }
 
-data class DiscoveredDevice(var record: ScanRecord, var rssi: Int, var txPower: Int, var rssiChangeThreshold: Int, var name: String?, var timestamp: Long = Date().time) {
+data class DiscoveredDevice(var address: String, var record: ScanRecord, var rssi: Int, var txPower: Int, var rssiChangeThreshold: Int, var name: String?, var timestamp: Long = Date().time) {
 
     fun updateMaybe(record: ScanRecord, rssi: Int, txPower: Int, name: String?): Boolean {
         val rssiChanged = Math.abs(this.rssi - rssi) >= rssiChangeThreshold

@@ -84,13 +84,16 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
     private suspend fun uploadData(): Boolean {
         val webhook = preferences.getString(applicationContext, R.string.settings_webhook, 0)
+        var dontOmitSendingWebhook = preferences.getBool(applicationContext, R.string.settings_dont_omit_sending_webhook, R.string.settings_dont_omit_sending_webhook_def)
+        var dontOverwriteEvents = preferences.getBool(applicationContext, R.string.settings_dont_overwrite_events, R.string.settings_dont_overwrite_events_def)
+
         if (TextUtils.isEmpty(webhook)) {
             Log.w(TAG, "uploadData(): No webhook set")
             return false
         }
         val now = Date().time
         val uploadInterval = preferences.getInt(applicationContext, R.string.settings_upload_inteval, R.string.settings_upload_inteval_def)
-        if (now - discoveryResults.lastUploadTimestamp < uploadInterval) {
+        if ((now - discoveryResults.lastUploadTimestamp < uploadInterval) && !dontOmitSendingWebhook) {
             Log.d(TAG, "uploadData(): Skip upload due to the uploadInterval $uploadInterval s")
             return true
         }
@@ -98,7 +101,7 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         discoveryResults.discoveredRecords.forEach {
             if (it.value.timestamp >= discoveryResults.lastUploadTimestamp) {
                 val obj = JSONObject()
-                obj.put("address", it.key)
+                obj.put("address", it.value.address)
                 obj.put("name", it.value.name)
                 obj.put("rssi", it.value.rssi)
                 obj.put("tx_power", it.value.txPower)
@@ -125,7 +128,7 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 arr.put(obj)
             }
         }
-        if (arr.length() == 0) {
+        if (arr.length() == 0 && !dontOmitSendingWebhook) {
             Log.d(TAG, "uploadData(): Skip upload, no new devices")
             return true
         }
@@ -182,18 +185,20 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                     result.scanRecord?.let { record ->
                         val address = result.device.address.uppercase()
                         devicesFound.add(address)
-                        if (!discoveryResults.discoveredRecords.containsKey(address)) {
-                            discoveryResults.discoveredRecords[address] = DiscoveredDevice(record, result.rssi, result.txPower, rssiTresh, record.deviceName)
-                            Log.d(TAG, "onScanResult(): New entry[$address]: ${discoveryResults.discoveredRecords[address]}")
+                        val isButton = record.deviceName?.contains("090615.remote.btsw1") == true
+                        val idx = if (dontOverwriteEvents || isButton) discoveryResults.discoveredRecords.keys.count().toString() else address
+                        if (!discoveryResults.discoveredRecords.containsKey(idx)) {
+                            discoveryResults.discoveredRecords[idx] = DiscoveredDevice(address, record, result.rssi, result.txPower, rssiTresh, record.deviceName)
+                            Log.d(TAG, "onScanResult(): New entry[$idx]: ${discoveryResults.discoveredRecords[idx]}")
                         } else {
-                            if(dontOverwriteEvents) {
-                                discoveryResults.discoveredRecords[address] = DiscoveredDevice(record, result.rssi, result.txPower, rssiTresh, record.deviceName)
-                                Log.d(TAG, "onScanResult(): New entry instead update[$address]: ${discoveryResults.discoveredRecords[address]}")
+                            if (dontOverwriteEvents) {
+                                discoveryResults.discoveredRecords[idx] = DiscoveredDevice(address, record, result.rssi, result.txPower, rssiTresh, record.deviceName)
+                                Log.d(TAG, "onScanResult(): New entry instead update[$idx]: ${discoveryResults.discoveredRecords[idx]}")
                             } else {
-                                if (discoveryResults.discoveredRecords[address]?.updateMaybe(record, result.rssi, result.txPower, record.deviceName) == true) {
-                                    Log.d(TAG, "onScanResult(): Updated entry[$address]: ${discoveryResults.discoveredRecords[address]}")
+                                if (discoveryResults.discoveredRecords[idx]?.updateMaybe(record, result.rssi, result.txPower, record.deviceName) == true) {
+                                    Log.d(TAG, "onScanResult(): Updated entry[$idx]: ${discoveryResults.discoveredRecords[idx]}")
                                 } else {
-                                    Log.d(TAG, "onScanResult(): Didnt Updated entry[$address]: ${discoveryResults.discoveredRecords[address]}")
+                                    Log.d(TAG, "onScanResult(): Didnt Updated entry[$idx]: ${discoveryResults.discoveredRecords[idx]}")
                                 }
                             }
                         }
@@ -230,7 +235,7 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             executeScan()
             uploadData()
             var dontOverwriteEvents = preferences.getBool(applicationContext, R.string.settings_dont_overwrite_events, R.string.settings_dont_overwrite_events_def)
-            if(dontOverwriteEvents) {
+            if (dontOverwriteEvents) {
                 discoveryResults.discoveredRecords = mutableMapOf<String, DiscoveredDevice>()
             }
             if (optimizeBackground && !powerManager.isInteractive) {
