@@ -61,6 +61,7 @@ fun SparseArray<ByteArray>.contentMapEquals(other: SparseArray<ByteArray>): Bool
 class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     private val FG_NOTIFICATION_ID = 1
+    private var theCallback: ScanCallback? = null
     private val bluetoothAdapter: BluetoothAdapter by lazy {
         val bluetoothManager = getSystemService(applicationContext, BluetoothManager::class.java) as BluetoothManager
         bluetoothManager.adapter
@@ -82,10 +83,132 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         DiscoveryResults.instance
     }
 
+    @SuppressLint("MissingPermission")
+    private suspend fun executeScan(): Boolean {
+        if (!applicationContext.hasRequiredRuntimePermissions()) {
+            Log.w(TAG, "No runtime permissions")
+            return false
+        }
+        if (!bluetoothAdapter.isEnabled) {
+            Log.w(TAG, "Bluetooth adapter disabled")
+            return false
+        }
+        var rssiTresh = preferences.getInt(applicationContext, R.string.settings_rssi_threshold, R.string.settings_rssi_threshold_def)
+        var dontOverwriteEvents = preferences.getBool(applicationContext, R.string.settings_dont_overwrite_events, R.string.settings_dont_overwrite_events_def)
+
+        val devicesFound = mutableSetOf<String>()
+        val settings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
+            .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+            .build()
+        val callback = object : ScanCallback() {
+            override fun onScanResult(callbackType: Int, outerResult: ScanResult?) {
+                Log.d(TAG, "onScanResult(): $outerResult / $callbackType")
+                outerResult?.let { result ->
+                    result.scanRecord?.let { record ->
+                        val address = result.device.address.uppercase()
+                        devicesFound.add(address)
+                        // "090615.remote.btsw1"
+
+                        val idx = if (dontOverwriteEvents) discoveryResults.discoveredRecords.keys.count().toString() else address
+                        if (!discoveryResults.discoveredRecords.containsKey(idx)) {
+                            discoveryResults.discoveredRecords[idx] = DiscoveredDevice(address, record, result.rssi, result.txPower, rssiTresh, record.deviceName)
+                            Log.d(TAG, "onScanResult(): New entry[$idx]: ${discoveryResults.discoveredRecords[idx]}")
+                        } else {
+                            if (dontOverwriteEvents) {
+                                discoveryResults.discoveredRecords[idx] = DiscoveredDevice(address, record, result.rssi, result.txPower, rssiTresh, record.deviceName)
+                                Log.d(TAG, "onScanResult(): New entry instead update[$idx]: ${discoveryResults.discoveredRecords[idx]}")
+                            } else {
+                                if (discoveryResults.discoveredRecords[idx]?.updateMaybe(record, result.rssi, result.txPower, record.deviceName) == true) {
+                                    Log.d(TAG, "onScanResult(): Updated entry[$idx]: ${discoveryResults.discoveredRecords[idx]}")
+                                } else {
+                                    Log.d(TAG, "onScanResult(): Didnt Updated entry[$idx]: ${discoveryResults.discoveredRecords[idx]}")
+                                }
+                            }
+                        }
+                        record
+                    }
+                }
+                Log.d(TAG, "onScanResult(): New cache: $discoveryResults")
+            }
+        }
+        val scanDuration = preferences.getInt(applicationContext, R.string.settings_scan_duration, R.string.settings_scan_duration_def)
+        val startNextScanRightAway = preferences.getBool(applicationContext, R.string.settings_use_ongoing_scan, R.string.settings_use_ongoing_scan_def)
+        if (startNextScanRightAway) {
+            if (theCallback == null) {
+                updateNotification("No callback...")
+                bleScanner.startScan(emptyList(), settings, callback)
+                updateNotification("Started first scan...")
+                Log.d(TAG, "Scan has started")
+                theCallback = callback
+            }
+            Log.d(TAG, "Scan has started for $scanDuration s")
+            withContext(Dispatchers.IO) {
+                Thread.sleep(1000L * scanDuration)
+            }
+            updateNotification("Stopping current scan...")
+
+            bleScanner.stopScan(theCallback)
+            theCallback = callback
+
+            updateNotification("Starting current scan...")
+            bleScanner.startScan(emptyList(), settings, callback)
+        } else {
+            if (theCallback != null) {
+                bleScanner.stopScan(theCallback)
+                theCallback = null
+            }
+            bleScanner.startScan(emptyList(), settings, callback)
+            val scanDuration = preferences.getInt(applicationContext, R.string.settings_scan_duration, R.string.settings_scan_duration_def)
+            Log.d(TAG, "Scan has started for $scanDuration s")
+            withContext(Dispatchers.IO) {
+                Thread.sleep(1000L * scanDuration)
+            }
+            bleScanner.stopScan(callback)
+            Log.d(TAG, "Scan has finished")
+        }
+        Log.d(TAG, "Scan has finished")
+        if (devicesFound.isNotEmpty()) {
+            updateNotification("Devices discovered: ${devicesFound.size}")
+        }
+        return true
+    }
+
+    override suspend fun doWork(): Result {
+        setForeground(createForegroundInfo())
+
+        while (true) {
+            val enabled = preferences.getBool(applicationContext, R.string.settings_enabled, R.string.settings_enabled_def)
+            val optimizeBackground = preferences.getBool(applicationContext, R.string.settings_optimize_background, R.string.settings_optimize_background_def)
+            Log.d(TAG, "doWork(): Next scan: $enabled / ${powerManager.isInteractive} / ${optimizeBackground}")
+            if (!enabled) {
+                Log.d(TAG, "doWork(): Stopping background scan as not enabled")
+                break
+            }
+
+            executeScan()
+            uploadData()
+            var dontOverwriteEvents = preferences.getBool(applicationContext, R.string.settings_dont_overwrite_events, R.string.settings_dont_overwrite_events_def)
+            if (dontOverwriteEvents) {
+                discoveryResults.discoveredRecords = mutableMapOf<String, DiscoveredDevice>()
+            }
+            if (optimizeBackground && !powerManager.isInteractive) {
+                Log.d(TAG, "doWork(): Stopping background scan for optimization")
+                break
+            }
+            val scanInterval = preferences.getInt(applicationContext, R.string.settings_scan_interval, R.string.settings_scan_interval_def)
+            Log.d(TAG, "doWork(): Next scan sleep: $scanInterval s")
+            withContext(Dispatchers.IO) {
+                Thread.sleep(1000L * scanInterval)
+            }
+        }
+        return Result.success()
+    }
+
+
     private suspend fun uploadData(): Boolean {
         val webhook = preferences.getString(applicationContext, R.string.settings_webhook, 0)
         var dontOmitSendingWebhook = preferences.getBool(applicationContext, R.string.settings_dont_omit_sending_webhook, R.string.settings_dont_omit_sending_webhook_def)
-        var dontOverwriteEvents = preferences.getBool(applicationContext, R.string.settings_dont_overwrite_events, R.string.settings_dont_overwrite_events_def)
 
         if (TextUtils.isEmpty(webhook)) {
             Log.w(TAG, "uploadData(): No webhook set")
@@ -158,101 +281,6 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         }
         Log.d(TAG, "Webhook send result: $result")
         return result == null
-    }
-
-    @SuppressLint("MissingPermission")
-    private suspend fun executeScan(): Boolean {
-        if (!applicationContext.hasRequiredRuntimePermissions()) {
-            Log.w(TAG, "No runtime permissions")
-            return false
-        }
-        if (!bluetoothAdapter.isEnabled) {
-            Log.w(TAG, "Bluetooth adapter disabled")
-            return false
-        }
-        var rssiTresh = preferences.getInt(applicationContext, R.string.settings_rssi_threshold, R.string.settings_rssi_threshold_def)
-        var dontOverwriteEvents = preferences.getBool(applicationContext, R.string.settings_dont_overwrite_events, R.string.settings_dont_overwrite_events_def)
-
-        val devicesFound = mutableSetOf<String>()
-        val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
-            .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
-            .build()
-        val callback = object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, outerResult: ScanResult?) {
-                Log.d(TAG, "onScanResult(): $outerResult / $callbackType")
-                outerResult?.let { result ->
-                    result.scanRecord?.let { record ->
-                        val address = result.device.address.uppercase()
-                        devicesFound.add(address)
-                        val isButton = record.deviceName?.contains("090615.remote.btsw1") == true
-                        if (!isButton) {
-                            Log.d(TAG, "onScanResult(): Skip $address, not a button")
-                            return
-                        }
-                        val idx = if (dontOverwriteEvents || isButton) discoveryResults.discoveredRecords.keys.count().toString() else address
-                        if (!discoveryResults.discoveredRecords.containsKey(idx)) {
-                            discoveryResults.discoveredRecords[idx] = DiscoveredDevice(address, record, result.rssi, result.txPower, rssiTresh, record.deviceName)
-                            Log.d(TAG, "onScanResult(): New entry[$idx]: ${discoveryResults.discoveredRecords[idx]}")
-                        } else {
-                            if (dontOverwriteEvents) {
-                                discoveryResults.discoveredRecords[idx] = DiscoveredDevice(address, record, result.rssi, result.txPower, rssiTresh, record.deviceName)
-                                Log.d(TAG, "onScanResult(): New entry instead update[$idx]: ${discoveryResults.discoveredRecords[idx]}")
-                            } else {
-                                if (discoveryResults.discoveredRecords[idx]?.updateMaybe(record, result.rssi, result.txPower, record.deviceName) == true) {
-                                    Log.d(TAG, "onScanResult(): Updated entry[$idx]: ${discoveryResults.discoveredRecords[idx]}")
-                                } else {
-                                    Log.d(TAG, "onScanResult(): Didnt Updated entry[$idx]: ${discoveryResults.discoveredRecords[idx]}")
-                                }
-                            }
-                        }
-                        record
-                    }
-                }
-                Log.d(TAG, "onScanResult(): New cache: $discoveryResults")
-            }
-        }
-        bleScanner.startScan(emptyList(), settings, callback)
-        val scanDuration = preferences.getInt(applicationContext, R.string.settings_scan_duration, R.string.settings_scan_duration_def)
-        Log.d(TAG, "Scan has started for $scanDuration s")
-        withContext(Dispatchers.IO) {
-            Thread.sleep(1000L * scanDuration)
-        }
-        bleScanner.stopScan(callback)
-        Log.d(TAG, "Scan has finished")
-        if (devicesFound.isNotEmpty()) {
-            updateNotification("Devices discovered: ${devicesFound.size}")
-        }
-        return true
-    }
-
-    override suspend fun doWork(): Result {
-        setForeground(createForegroundInfo())
-        while (true) {
-            val enabled = preferences.getBool(applicationContext, R.string.settings_enabled, R.string.settings_enabled_def)
-            val optimizeBackground = preferences.getBool(applicationContext, R.string.settings_optimize_background, R.string.settings_optimize_background_def)
-            Log.d(TAG, "doWork(): Next scan: $enabled / ${powerManager.isInteractive} / ${optimizeBackground}")
-            if (!enabled) {
-                Log.d(TAG, "doWork(): Stopping background scan as not enabled")
-                break
-            }
-            executeScan()
-            uploadData()
-            var dontOverwriteEvents = preferences.getBool(applicationContext, R.string.settings_dont_overwrite_events, R.string.settings_dont_overwrite_events_def)
-            if (dontOverwriteEvents) {
-                discoveryResults.discoveredRecords = mutableMapOf<String, DiscoveredDevice>()
-            }
-            if (optimizeBackground && !powerManager.isInteractive) {
-                Log.d(TAG, "doWork(): Stopping background scan for optimization")
-                break
-            }
-            val scanInterval = preferences.getInt(applicationContext, R.string.settings_scan_interval, R.string.settings_scan_interval_def)
-            Log.d(TAG, "doWork(): Next scan sleep: $scanInterval s")
-            withContext(Dispatchers.IO) {
-                Thread.sleep(1000L * scanInterval)
-            }
-        }
-        return Result.success()
     }
 
     private fun createNotification(text: String) : Notification {
