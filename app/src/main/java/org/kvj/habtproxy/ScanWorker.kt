@@ -99,32 +99,34 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
         val arr = JSONArray()
         discoveryResults.discoveredRecords.forEach {
-            val obj = JSONObject()
-            obj.put("address", it.value.address)
-            obj.put("name", it.value.name)
-            obj.put("rssi", it.value.rssi)
-            obj.put("tx_power", it.value.txPower)
-            obj.put("timestamp", it.value.timestamp)
-            it.value.record.serviceUuids?.let {
-                val uuids = JSONArray()
-                it.forEach { uuids.put(it.uuid.toString()) }
-                obj.put("service_uuids", uuids)
-            }
-            it.value.record.serviceData?.let {
-                val serviceData = JSONObject()
-                it.forEach {
-                    serviceData.put(it.key.uuid.toString(), Base64.encodeToString(it.value, Base64.DEFAULT))
+            if (it.value.timestamp >= discoveryResults.lastUploadTimestamp) {
+                val obj = JSONObject()
+                obj.put("address", it.value.address)
+                obj.put("name", it.value.name)
+                obj.put("rssi", it.value.rssi)
+                obj.put("tx_power", it.value.txPower)
+                obj.put("timestamp", it.value.timestamp)
+                it.value.record.serviceUuids?.let {
+                    val uuids = JSONArray()
+                    it.forEach { uuids.put(it.uuid.toString()) }
+                    obj.put("service_uuids", uuids)
                 }
-                obj.put("service_data", serviceData)
-            }
-            it.value.record.manufacturerSpecificData?.let {
-                val mData = JSONObject()
-                it.forEach { key, value ->
-                    mData.put(key.toString(), Base64.encodeToString(value, Base64.DEFAULT))
+                it.value.record.serviceData?.let {
+                    val serviceData = JSONObject()
+                    it.forEach {
+                        serviceData.put(it.key.uuid.toString(), Base64.encodeToString(it.value, Base64.DEFAULT))
+                    }
+                    obj.put("service_data", serviceData)
                 }
-                obj.put("manufacturer_data", mData)
+                it.value.record.manufacturerSpecificData?.let {
+                    val mData = JSONObject()
+                    it.forEach { key, value ->
+                        mData.put(key.toString(), Base64.encodeToString(value, Base64.DEFAULT))
+                    }
+                    obj.put("manufacturer_data", mData)
+                }
+                arr.put(obj)
             }
-            arr.put(obj)
         }
         discoveryResults.clear()
         if (arr.length() == 0) {

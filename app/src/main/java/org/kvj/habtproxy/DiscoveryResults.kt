@@ -59,11 +59,12 @@ class DiscoveryResults private constructor() {
         }
     }
 
-    val discoveredRecords = mutableMapOf<String, DiscoveredDevice>()
+    var discoveredRecords = mutableMapOf<String, DiscoveredDevice>()
     var lastUploadTimestamp: Long = 0
 
     fun clear() {
         discoveredRecords.clear()
+        discoveredRecords = mutableMapOf<String, DiscoveredDevice>()
     }
 
 }
