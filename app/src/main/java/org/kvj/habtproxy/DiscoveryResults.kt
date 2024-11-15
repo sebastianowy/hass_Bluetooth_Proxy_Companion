@@ -30,13 +30,16 @@ private fun serviceRecordsEqual(a: ScanRecord, b: ScanRecord): Boolean {
     return true;
 }
 
-data class DiscoveredDevice(var address: String, var record: ScanRecord, var rssi: Int, var txPower: Int, var rssiChangeThreshold: Int, var name: String?, var timestamp: Long = Date().time) {
+data class DiscoveredDevice(var address: String, var record: ScanRecord, var rssi: Int, var txPower: Int, var name: String?, var timestamp: Long = Date().time) {
+
+    private val rssiChangeThreshold = 10 // TODO: Configure
 
     fun updateMaybe(record: ScanRecord, rssi: Int, txPower: Int, name: String?): Boolean {
         val rssiChanged = Math.abs(this.rssi - rssi) >= rssiChangeThreshold
         val txChanged = this.txPower != txPower
         if (!serviceRecordsEqual(this.record, record) || rssiChanged || this.name != name || txChanged) {
             Log.d(TAG, "updateMaybe: ${!serviceRecordsEqual(this.record, record)} / ${this.rssi} != ${rssi} / ${this.txPower} != ${txPower} / ${this.name != name}")
+            this.address = address
             this.record = record
             this.rssi = rssi
             this.txPower = txPower
@@ -57,7 +60,11 @@ class DiscoveryResults private constructor() {
         }
     }
 
-    var discoveredRecords = mutableMapOf<String, DiscoveredDevice>()
+    val discoveredRecords = mutableMapOf<String, DiscoveredDevice>()
     var lastUploadTimestamp: Long = 0
+
+    fun clear() {
+        discoveredRecords.clear()
+    }
 
 }

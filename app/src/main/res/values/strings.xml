@@ -6,21 +6,14 @@
     <string name="settings_enabled_def">false</string>
     <string name="settings_optimize_background">optimize_background</string>
     <string name="settings_optimize_background_def">false</string>
-    <string name="settings_dont_overwrite_events">enabled</string>
-    <string name="settings_dont_overwrite_events_def">false</string>
-    <string name="settings_dont_omit_sending_webhook">enabled</string>
-    <string name="settings_dont_omit_sending_webhook_def">false</string>
-    <string name="settings_use_ongoing_scan">enabled</string>
-    <string name="settings_use_ongoing_scan_def">false</string>
     <string name="settings_webhook">webhook</string>
-    <string name="settings_webhook_def">http://192.168.1.10:8123/api/webhook/bf85f91d5744ecaec3845a834787b4e42e08007f3b84ef58d301855baca40f7f</string>
+    <string name="settings_unique_events_devices_names">unique_events_devices_names</string>
+    <string name="settings_unique_events_devices_names_def">090615.remote.btsw1</string>
 
-    <string name="settings_rssi_threshold_def">10</string>
     <string name="settings_scan_duration_def">3</string>
     <string name="settings_scan_interval_def">0</string>
     <string name="settings_upload_inteval_def">0</string>
 
-    <string name="settings_rssi_threshold">rssi_threshold</string>
     <string name="settings_scan_duration">scan_duration</string>
     <string name="settings_scan_interval">scan_interval</string>
     <string name="settings_upload_inteval">upload_inteval</string>

@@ -13,28 +13,12 @@
         <EditTextPreference
             app:useSimpleSummaryProvider="true"
             app:key="@string/settings_webhook"
-            app:defaultValue="@string/settings_webhook_def"
             app:title="Home Assistant webhook"/>
-        <SwitchPreferenceCompat
-                app:key="@string/settings_dont_overwrite_events"
-                app:defaultValue="@string/settings_dont_overwrite_events_def"
-                app:singleLineTitle="true"
-                app:title="Dont overwrite events"/>
-        <SwitchPreferenceCompat
-                app:key="@string/settings_use_ongoing_scan"
-                app:defaultValue="@string/settings_use_ongoing_scan_def"
-                app:singleLineTitle="true"
-                app:title="Start next scan right away"/>
-        <SwitchPreferenceCompat
-                app:key="@string/settings_dont_omit_sending_webhook"
-                app:defaultValue="@string/settings_dont_omit_sending_webhook_def"
-                app:singleLineTitle="true"
-                app:title="Dont omit sending webhook"/>
         <EditTextPreference
             app:useSimpleSummaryProvider="true"
-            app:defaultValue="@string/settings_rssi_threshold_def"
-            app:key="@string/settings_rssi_threshold"
-            app:title="Rssi threshold"/>
+            app:key="@string/settings_unique_events_devices_names"
+            app:defaultValue="@string/settings_unique_events_devices_names_def"
+            app:title="Devices names having unique events (split by comma)"/>
     </PreferenceCategory>
     <PreferenceCategory app:title="Scan Intervals" app:key="cat_intervals">
         <EditTextPreference
