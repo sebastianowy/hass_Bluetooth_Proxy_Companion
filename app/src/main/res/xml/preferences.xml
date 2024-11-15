@@ -13,6 +13,7 @@
         <EditTextPreference
             app:useSimpleSummaryProvider="true"
             app:key="@string/settings_webhook"
+            app:defaultValue="@string/settings_webhook_def"
             app:title="Home Assistant webhook"/>
         <EditTextPreference
             app:useSimpleSummaryProvider="true"

@@ -39,7 +39,6 @@ data class DiscoveredDevice(var address: String, var record: ScanRecord, var rss
         val txChanged = this.txPower != txPower
         if (!serviceRecordsEqual(this.record, record) || rssiChanged || this.name != name || txChanged) {
             Log.d(TAG, "updateMaybe: ${!serviceRecordsEqual(this.record, record)} / ${this.rssi} != ${rssi} / ${this.txPower} != ${txPower} / ${this.name != name}")
-            this.address = address
             this.record = record
             this.rssi = rssi
             this.txPower = txPower

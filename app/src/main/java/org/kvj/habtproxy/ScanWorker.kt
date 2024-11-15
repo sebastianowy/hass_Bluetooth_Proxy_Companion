@@ -95,39 +95,38 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             Log.d(TAG, "uploadData(): Skip upload due to the uploadInterval $uploadInterval s")
             return true
         }
-        val uniqueEventsDevicesSet = preferences.getString(applicationContext, R.string.settings_unique_events_devices_names, R.string.settings_unique_events_devices_names_def).split(",").map { it.trim() }.toSet()
+        val uniqueEventsDevicesSet = (preferences.getString(applicationContext, R.string.settings_unique_events_devices_names, R.string.settings_unique_events_devices_names_def)?:"").split(",").map { it.trim() }.toSet()
 
         val arr = JSONArray()
         discoveryResults.discoveredRecords.forEach {
-            if (it.value.timestamp >= discoveryResults.lastUploadTimestamp || uniqueEventsDevicesSet.contains(it.value.name)) {
-                val obj = JSONObject()
-                obj.put("address", it.value.address)
-                obj.put("name", it.value.name)
-                obj.put("rssi", it.value.rssi)
-                obj.put("tx_power", it.value.txPower)
-                obj.put("timestamp", it.value.timestamp)
-                it.value.record.serviceUuids?.let {
-                    val uuids = JSONArray()
-                    it.forEach { uuids.put(it.uuid.toString()) }
-                    obj.put("service_uuids", uuids)
-                }
-                it.value.record.serviceData?.let {
-                    val serviceData = JSONObject()
-                    it.forEach {
-                        serviceData.put(it.key.uuid.toString(), Base64.encodeToString(it.value, Base64.DEFAULT))
-                    }
-                    obj.put("service_data", serviceData)
-                }
-                it.value.record.manufacturerSpecificData?.let {
-                    val mData = JSONObject()
-                    it.forEach { key, value ->
-                        mData.put(key.toString(), Base64.encodeToString(value, Base64.DEFAULT))
-                    }
-                    obj.put("manufacturer_data", mData)
-                }
-                arr.put(obj)
+            val obj = JSONObject()
+            obj.put("address", it.value.address)
+            obj.put("name", it.value.name)
+            obj.put("rssi", it.value.rssi)
+            obj.put("tx_power", it.value.txPower)
+            obj.put("timestamp", it.value.timestamp)
+            it.value.record.serviceUuids?.let {
+                val uuids = JSONArray()
+                it.forEach { uuids.put(it.uuid.toString()) }
+                obj.put("service_uuids", uuids)
             }
+            it.value.record.serviceData?.let {
+                val serviceData = JSONObject()
+                it.forEach {
+                    serviceData.put(it.key.uuid.toString(), Base64.encodeToString(it.value, Base64.DEFAULT))
+                }
+                obj.put("service_data", serviceData)
+            }
+            it.value.record.manufacturerSpecificData?.let {
+                val mData = JSONObject()
+                it.forEach { key, value ->
+                    mData.put(key.toString(), Base64.encodeToString(value, Base64.DEFAULT))
+                }
+                obj.put("manufacturer_data", mData)
+            }
+            arr.put(obj)
         }
+        discoveryResults.clear()
         if (arr.length() == 0) {
             Log.d(TAG, "uploadData(): Skip upload, no new devices")
             return true
@@ -170,25 +169,37 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             Log.w(TAG, "Bluetooth adapter disabled")
             return false
         }
+        val scanDuration = preferences.getInt(applicationContext, R.string.settings_scan_duration, R.string.settings_scan_duration_def)
+        Log.d(TAG, "Scan has started for $scanDuration s")
+        withContext(Dispatchers.IO) {
+            Thread.sleep(1000L * scanDuration)
+        }
+        bleScanner.flushPendingScanResults(theCallback)
+
+        Log.d(TAG, "Scan has finished")
+        return true
+    }
+
+    private suspend fun setTheCallback(): Boolean {
         val devicesFound = mutableSetOf<String>()
-        val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
-            .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
-            .build()
+        val uniqueEventsDevicesSet = (preferences.getString(applicationContext, R.string.settings_unique_events_devices_names, R.string.settings_unique_events_devices_names_def)?:"").split(",").map { it.trim() }.toSet()
+
         val callback = object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, result: ScanResult?) {
-//                Log.d(TAG, "onScanResult(): $result / $callbackType")
-                result?.let { result ->
+            override fun onScanResult(callbackType: Int, scResult: ScanResult?) {
+//                Log.d(TAG, "onScanResult(): $scResult / $callbackType")
+                scResult?.let { result ->
                     result.scanRecord?.let { record ->
                         val address = result.device.address.uppercase()
+
+                        val key = if (uniqueEventsDevicesSet.contains(record.deviceName)) (address + "_" + Date().time) else address
                         devicesFound.add(address)
 
-                        if (!discoveryResults.discoveredRecords.containsKey(address)) {
-                            discoveryResults.discoveredRecords[address] = DiscoveredDevice(address, record, result.rssi, result.txPower, record.deviceName)
-                            Log.d(TAG, "onScanResult(): New entry[$address]: ${discoveryResults.discoveredRecords[address]}")
+                        if (!discoveryResults.discoveredRecords.containsKey(key)) {
+                            discoveryResults.discoveredRecords[key] = DiscoveredDevice(address, record, result.rssi, result.txPower, record.deviceName)
+                            Log.d(TAG, "onScanResult(): New entry[key]: ${discoveryResults.discoveredRecords[key]}")
                         } else {
-                            if (discoveryResults.discoveredRecords[address]?.updateMaybe(record, result.rssi, result.txPower, record.deviceName) == true) {
-                                Log.d(TAG, "onScanResult(): Updated entry[$address]: ${discoveryResults.discoveredRecords[address]}")
+                            if (discoveryResults.discoveredRecords[key]?.updateMaybe(record, result.rssi, result.txPower, record.deviceName) == true) {
+                                Log.d(TAG, "onScanResult(): Updated entry[$key]: ${discoveryResults.discoveredRecords[key]}")
                             }
                         }
                         record
@@ -197,38 +208,34 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 //                Log.d(TAG, "onScanResult(): New cache: $discoveredRecords")
             }
         }
-        theCallback = callback
-        val scanDuration = preferences.getInt(applicationContext, R.string.settings_scan_duration, R.string.settings_scan_duration_def)
-        Log.d(TAG, "Scan has started for $scanDuration s")
-        withContext(Dispatchers.IO) {
-            Thread.sleep(1000L * scanDuration)
-        }
-        bleScanner.flushPendingScanResults(callback)
-        discoveryResults.clear()
-
-        Log.d(TAG, "Scan has finished")
         if (devicesFound.isNotEmpty()) {
             updateNotification("Devices discovered: ${devicesFound.size}")
         }
+        theCallback = callback
         return true
     }
 
     override suspend fun doWork(): Result {
         setForeground(createForegroundInfo())
+        val settings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+            .build()
         while (true) {
             val enabled = preferences.getBool(applicationContext, R.string.settings_enabled, R.string.settings_enabled_def)
             val optimizeBackground = preferences.getBool(applicationContext, R.string.settings_optimize_background, R.string.settings_optimize_background_def)
             Log.d(TAG, "doWork(): Next scan: $enabled / ${powerManager.isInteractive} / ${optimizeBackground}")
             if (!enabled) {
                 Log.d(TAG, "doWork(): Stopping background scan as not enabled")
-                if(theCallback == null) {
+                if(theCallback != null) {
                     bleScanner.stopScan(theCallback)
                     theCallback = null
                 }
                 break
             }
             if(theCallback == null) {
-                bleScanner.startScan(emptyList(), settings, callback)
+                setTheCallback()
+                bleScanner.startScan(emptyList(), settings, theCallback)
             }
             executeScan()
             uploadData()
