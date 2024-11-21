@@ -101,6 +101,7 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         discoveryResults.discoveredRecords.forEach {
             if (it.value.timestamp >= discoveryResults.lastUploadTimestamp) {
                 val obj = JSONObject()
+                obj.put("_key", it.key)
                 obj.put("address", it.value.address)
                 obj.put("name", it.value.name)
                 obj.put("rssi", it.value.rssi)
@@ -225,8 +226,7 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             .build()
         while (true) {
             val enabled = preferences.getBool(applicationContext, R.string.settings_enabled, R.string.settings_enabled_def)
-            val optimizeBackground = preferences.getBool(applicationContext, R.string.settings_optimize_background, R.string.settings_optimize_background_def)
-            Log.d(TAG, "doWork(): Next scan: $enabled / ${powerManager.isInteractive} / ${optimizeBackground}")
+            Log.d(TAG, "doWork(): Next scan: $enabled / ${powerManager.isInteractive}")
             if (!enabled) {
                 Log.d(TAG, "doWork(): Stopping background scan as not enabled")
                 if(theCallback != null) {
@@ -241,10 +241,6 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             }
             executeScan()
             uploadData()
-            if (optimizeBackground && !powerManager.isInteractive) {
-                Log.d(TAG, "doWork(): Stopping background scan for optimization")
-                break
-            }
             val scanInterval = preferences.getInt(applicationContext, R.string.settings_scan_interval, R.string.settings_scan_interval_def)
             Log.d(TAG, "doWork(): Next scan sleep: $scanInterval s")
             withContext(Dispatchers.IO) {

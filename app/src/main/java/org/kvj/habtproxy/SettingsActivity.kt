@@ -10,12 +10,14 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
+import android.view.WindowManager
 
 class SettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.settings_activity)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (savedInstanceState == null) {
             supportFragmentManager
                 .beginTransaction()
@@ -25,7 +27,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun scheduleForegroundScan() {
-        val workRequest = PeriodicWorkRequestBuilder<ScanWorker>(15, TimeUnit.MINUTES)
+        val workRequest = PeriodicWorkRequestBuilder<ScanWorker>(1, TimeUnit.MINUTES)
             .build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             "foregroundScan",
@@ -43,7 +45,6 @@ class SettingsActivity : AppCompatActivity() {
     class SettingsFragment : PreferenceFragmentCompat() {
 
         private fun updateProxySection(enabled: Boolean) {
-            findPreference<Preference>(getString(R.string.settings_optimize_background))?.isEnabled = enabled
             findPreference<Preference>(getString(R.string.settings_webhook))?.isEnabled = enabled
             findPreference<PreferenceCategory>("cat_intervals")?.isEnabled = enabled
         }

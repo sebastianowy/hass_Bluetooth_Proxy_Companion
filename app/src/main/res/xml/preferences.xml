@@ -5,11 +5,6 @@
             app:key="@string/settings_enabled"
             app:defaultValue="@string/settings_enabled_def"
             app:title="Scan enabled"/>
-        <SwitchPreferenceCompat
-            app:key="@string/settings_optimize_background"
-            app:defaultValue="@string/settings_optimize_background_def"
-            app:singleLineTitle="false"
-            app:title="Optimized scan in background"/>
         <EditTextPreference
             app:useSimpleSummaryProvider="true"
             app:key="@string/settings_webhook"
