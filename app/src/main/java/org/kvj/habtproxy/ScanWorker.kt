@@ -62,6 +62,8 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
     private val FG_NOTIFICATION_ID = 1
     private var theCallback: ScanCallback? = null
+    private var theSettings: ScanSettings? = null
+    private var theLastScanStart = Date().time
     private val bluetoothAdapter: BluetoothAdapter by lazy {
         val bluetoothManager = getSystemService(applicationContext, BluetoothManager::class.java) as BluetoothManager
         bluetoothManager.adapter
@@ -90,7 +92,7 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             return false
         }
         val now = Date().time
-        val uploadInterval = preferences.getInt(applicationContext, R.string.settings_upload_inteval, R.string.settings_upload_inteval_def)
+        val uploadInterval = preferences.getInt(applicationContext, R.string.settings_upload_interval, R.string.settings_upload_interval_def)
         if (now - discoveryResults.lastUploadTimestamp < uploadInterval) {
             Log.d(TAG, "uploadData(): Skip upload due to the uploadInterval $uploadInterval s")
             return true
@@ -177,7 +179,15 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         withContext(Dispatchers.IO) {
             Thread.sleep(1000L * scanDuration)
         }
-        bleScanner.flushPendingScanResults(theCallback)
+        val now = Date().time
+        val scanRestartInterval = preferences.getInt(applicationContext, R.string.settings_scan_restart_interval, R.string.settings_scan_restart_interval_def)
+        if ((now - theLastScanStart) >= scanRestartInterval) {
+            bleScanner.stopScan(theCallback)
+            bleScanner.startScan(emptyList(), theSettings, theCallback)
+            theLastScanStart = Date().time
+        } else {
+            bleScanner.flushPendingScanResults(theCallback)
+        }
 
         Log.d(TAG, "Scan has finished")
         return true
@@ -224,6 +234,7 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
             .build()
+        theSettings = settings
         while (true) {
             val enabled = preferences.getBool(applicationContext, R.string.settings_enabled, R.string.settings_enabled_def)
             Log.d(TAG, "doWork(): Next scan: $enabled / ${powerManager.isInteractive}")
@@ -238,6 +249,7 @@ class ScanWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             if(theCallback == null) {
                 setTheCallback()
                 bleScanner.startScan(emptyList(), settings, theCallback)
+                theLastScanStart = Date().time
             }
             executeScan()
             uploadData()

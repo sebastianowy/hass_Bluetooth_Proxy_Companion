@@ -1,4 +1,5 @@
 {
   "image": "ghcr.io/manchestermachinemakers/android-devcontainer:main",
-  "runArgs": [ "--init" ]
+  "runArgs": [ "--init" ],
+  "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}"
 }

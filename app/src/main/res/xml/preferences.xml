@@ -29,8 +29,13 @@
             app:title="Scan interval (seconds)"/>
         <EditTextPreference
             app:useSimpleSummaryProvider="true"
-            app:defaultValue="@string/settings_upload_inteval_def"
-            app:key="@string/settings_upload_inteval"
+            app:defaultValue="@string/settings_upload_interval_def"
+            app:key="@string/settings_upload_interval"
             app:title="Data upload interval (seconds)"/>
+        <EditTextPreference
+            app:useSimpleSummaryProvider="true"
+            app:defaultValue="@string/settings_scan_restart_interval_def"
+            app:key="@string/settings_scan_restart_interval"
+            app:title="Scan restart interval (seconds)"/>
     </PreferenceCategory>
 </PreferenceScreen>
